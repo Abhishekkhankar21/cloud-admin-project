@@ -1,0 +1,36 @@
+---
+- hosts: jenkins
+  become: yes
+
+  tasks:
+
+  - name: Update apt
+    apt:
+      update_cache: yes
+
+  - name: Install Java
+    apt:
+      name: openjdk-17-jdk
+      state: present
+
+  - name: Install dependencies
+    apt:
+      name:
+        - wget
+        - curl
+      state: present
+
+  - name: Download Jenkins LTS package
+    get_url:
+      url: https://pkg.jenkins.io/debian-stable/binary/jenkins_2.452.3_all.deb
+      dest: /tmp/jenkins.deb
+
+  - name: Install Jenkins
+    apt:
+      deb: /tmp/jenkins.deb
+
+  - name: Start Jenkins
+    service:
+      name: jenkins
+      state: started
+      enabled: yes
