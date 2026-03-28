@@ -1,41 +1,179 @@
 ---
 - hosts: monitoring
   become: yes
+  vars:
+    prometheus_version: "3.10.0"
+    node_exporter_version: "1.6.1"
+    prometheus_install_dir: "/usr/local/bin"
+    prometheus_config_dir: "/etc/prometheus"
+    prometheus_data_dir: "/var/lib/prometheus"
 
   tasks:
+    - name: Update apt packages
+      apt:
+        update_cache: yes
 
-  - name: Update apt packages
-    apt:
-      update_cache: yes
+    - name: Install required packages
+      apt:
+        name:
+          - wget
+          - curl
+          - tar
+          - apt-transport-https
+          - software-properties-common
+        state: present
 
-  - name: Install required packages
-    apt:
-      name:
-        - wget
-        - curl
-        - apt-transport-https
-        - software-properties-common
-      state: present
+    # -----------------------------
+    # Install Prometheus
+    # -----------------------------
+    - name: Download Prometheus
+      get_url:
+        url: "https://github.com/prometheus/prometheus/releases/download/v{{ prometheus_version }}/prometheus-{{ prometheus_version }}.linux-amd64.tar.gz"
+        dest: "/tmp/prometheus-{{ prometheus_version }}.tar.gz"
 
-  - name: Add Grafana GPG key
-    shell: |
-      wget -q -O - https://packages.grafana.com/gpg.key | sudo apt-key add -
+    - name: Extract Prometheus
+      unarchive:
+        src: "/tmp/prometheus-{{ prometheus_version }}.tar.gz"
+        dest: "/tmp/"
+        remote_src: yes
 
-  - name: Add Grafana repository
-    shell: |
-      echo "deb https://packages.grafana.com/oss/deb stable main" | sudo tee /etc/apt/sources.list.d/grafana.list
+    - name: Move Prometheus binary
+      copy:
+        src: "/tmp/prometheus-{{ prometheus_version }}.linux-amd64/prometheus"
+        dest: "{{ prometheus_install_dir }}/prometheus"
+        mode: '0755'
+        remote_src: yes
 
-  - name: Update apt again
-    apt:
-      update_cache: yes
+    - name: Move promtool binary
+      copy:
+        src: "/tmp/prometheus-{{ prometheus_version }}.linux-amd64/promtool"
+        dest: "{{ prometheus_install_dir }}/promtool"
+        mode: '0755'
+        remote_src: yes
 
-  - name: Install Grafana
-    apt:
-      name: grafana
-      state: present
+    - name: Create Prometheus directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+      loop:
+        - "{{ prometheus_config_dir }}"
+        - "{{ prometheus_data_dir }}"
 
-  - name: Start Grafana
-    service:
-      name: grafana-server
-      state: started
-      enabled: yes
+    - name: Copy Prometheus config
+      copy:
+        content: |
+          global:
+            scrape_interval: 15s
+            evaluation_interval: 15s
+
+          scrape_configs:
+            - job_name: 'prometheus'
+              static_configs:
+                - targets: ['localhost:9090']
+
+            - job_name: 'node_exporter'
+              static_configs:
+                - targets:
+                    - '13.232.144.1:9100'
+                    - '13.233.148.108:9100'
+                    - '65.2.151.216:9100'
+        dest: "{{ prometheus_config_dir }}/prometheus.yml"
+        owner: ubuntu
+        group: ubuntu
+        mode: '0644'
+
+    - name: Create Prometheus systemd service
+      copy:
+        dest: /etc/systemd/system/prometheus.service
+        content: |
+          [Unit]
+          Description=Prometheus Monitoring
+          Wants=network-online.target
+          After=network-online.target
+
+          [Service]
+          User=ubuntu
+          ExecStart={{ prometheus_install_dir }}/prometheus \
+            --config.file={{ prometheus_config_dir }}/prometheus.yml \
+            --storage.tsdb.path={{ prometheus_data_dir }} \
+            --web.console.templates={{ prometheus_config_dir }}/consoles \
+            --web.console.libraries={{ prometheus_config_dir }}/console_libraries
+
+          Restart=always
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Reload systemd
+      command: systemctl daemon-reload
+
+    - name: Start Prometheus
+      service:
+        name: prometheus
+        state: started
+        enabled: yes
+
+    # -----------------------------
+    # Install Node Exporter
+    # -----------------------------
+    - name: Download Node Exporter
+      get_url:
+        url: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
+        dest: "/tmp/node_exporter-{{ node_exporter_version }}.tar.gz"
+
+    - name: Extract Node Exporter
+      unarchive:
+        src: "/tmp/node_exporter-{{ node_exporter_version }}.tar.gz"
+        dest: "/usr/local/bin/"
+        remote_src: yes
+        extra_opts: [--strip-components=1]
+
+    - name: Create Node Exporter systemd service
+      copy:
+        dest: /etc/systemd/system/node_exporter.service
+        content: |
+          [Unit]
+          Description=Node Exporter
+          Wants=network-online.target
+          After=network-online.target
+
+          [Service]
+          User=ubuntu
+          ExecStart=/usr/local/bin/node_exporter
+
+          Restart=always
+
+          [Install]
+          WantedBy=default.target
+
+    - name: Start Node Exporter
+      service:
+        name: node_exporter
+        state: started
+        enabled: yes
+
+    # -----------------------------
+    # Install Grafana
+    # -----------------------------
+    - name: Add Grafana GPG key
+      shell: wget -q -O - https://packages.grafana.com/gpg.key | apt-key add -
+
+    - name: Add Grafana repository
+      shell: echo "deb https://packages.grafana.com/oss/deb stable main" | tee /etc/apt/sources.list.d/grafana.list
+
+    - name: Update apt again
+      apt:
+        update_cache: yes
+
+    - name: Install Grafana
+      apt:
+        name: grafana
+        state: present
+
+    - name: Start Grafana
+      service:
+        name: grafana-server
+        state: started
+        enabled: yes

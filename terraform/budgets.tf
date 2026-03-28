@@ -1,12 +1,31 @@
-resource "aws_budgets_budget" "monthly" {
+resource "aws_budgets_budget" "monthly_budget" {
+  name         = "monthly-cost-budget"
+  budget_type  = "COST"
+  limit_amount = "50"
+  limit_unit   = "USD"
+  time_unit    = "MONTHLY"
 
-  name = "MonthlyBudget"
+  notification {
+    comparison_operator        = "GREATER_THAN"
+    threshold                  = 50
+    threshold_type             = "PERCENTAGE"
+    notification_type          = "ACTUAL"
+    subscriber_email_addresses = ["your-email@example.com"]
+  }
 
-  budget_type = "COST"
+  notification {
+    comparison_operator        = "GREATER_THAN"
+    threshold                  = 80
+    threshold_type             = "PERCENTAGE"
+    notification_type          = "ACTUAL"
+    subscriber_email_addresses = ["your-email@example.com"]
+  }
 
-  limit_amount = "100"
-
-  limit_unit = "USD"
-
-  time_unit = "MONTHLY"
+  notification {
+    comparison_operator        = "GREATER_THAN"
+    threshold                  = 100
+    threshold_type             = "PERCENTAGE"
+    notification_type          = "ACTUAL"
+    subscriber_email_addresses = ["your-email@example.com"]
+  }
 }

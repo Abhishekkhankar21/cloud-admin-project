@@ -1,0 +1,16 @@
+---
+- name: Deploy Application
+  hosts: app_servers
+  become: yes
+  tasks:
+    - name: Clone project repo
+      git:
+        repo: https://github.com/Abhishekkhankar21/cloud-admin-project.git
+        dest: /home/ubuntu/cloud-admin-project
+        version: main
+        force: yes
+
+    - name: Run deployment script
+      shell: |
+        cd /home/ubuntu/cloud-admin-project
+        ./deploy.sh

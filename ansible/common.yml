@@ -1,13 +1,17 @@
-- hosts: all
+---
+- name: Common Server Setup
+  hosts: all
   become: yes
-
   tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
 
-  - name: update packages
-    apt:
-      update_cache: yes
-
-  - name: install docker
-    apt:
-      name: docker.io
-      state: present
+    - name: Install basic packages
+      apt:
+        name:
+          - git
+          - curl
+          - python3-pip
+          - docker.io
+        state: present
