@@ -3,6 +3,7 @@ pipeline {
 
     environment {
         AWS_REGION = "ap-south-1"
+        PATH = "/usr/local/bin:${env.PATH}" // ensure Terraform is in PATH
     }
 
     stages {
@@ -10,6 +11,28 @@ pipeline {
             steps {
                 git branch: 'main', 
                     url: 'https://github.com/Abhishekkhankar21/cloud-admin-project.git'
+            }
+        }
+
+        stage('Install Terraform') {
+            steps {
+                script {
+                    // Check if terraform exists
+                    def terraformExists = sh(script: "which terraform || true", returnStdout: true).trim()
+                    if (!terraformExists) {
+                        echo "Terraform not found, installing..."
+                        sh """
+                            sudo apt update
+                            sudo apt install -y gnupg software-properties-common curl
+                            curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+                            echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com \$(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+                            sudo apt update
+                            sudo apt install -y terraform
+                        """
+                    } else {
+                        echo "Terraform already installed at ${terraformExists}"
+                    }
+                }
             }
         }
 
