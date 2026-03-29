@@ -1,0 +1,49 @@
+pipeline {
+
+agent any
+
+stages {
+
+stage('Clone Repo'){
+steps{
+git 'https://github.com/yourrepo/cloud-admin-project'
+}
+}
+
+stage('Terraform Init'){
+steps{
+sh 'cd terraform && terraform init'
+}
+}
+
+stage('Terraform Apply'){
+steps{
+sh 'cd terraform && terraform apply -auto-approve'
+}
+}
+
+stage('Generate Inventory') {
+    steps {
+        sh 'chmod +x scripts/generate_inventory.sh'
+        sh './scripts/generate_inventory.sh'
+    }
+}
+
+stage('Run Ansible'){
+steps{
+sh 'ansible-playbook ansible/monitoring.yml'
+}
+}
+
+}
+}
+
+stage('Configure Monitoring Server') {
+
+steps {
+
+sh 'ansible-playbook -i ansible/inventory ansible/monitoring.yml'
+
+}
+
+}

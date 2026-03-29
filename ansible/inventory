@@ -1,11 +1,11 @@
 [jenkins]
-13.235.17.229
+3.108.193.246
 
 [ansible]
-43.205.194.243
+13.201.54.101
 
 [monitoring]
-13.234.18.15
+43.205.208.138
 
 [all:vars]
 ansible_user=ubuntu

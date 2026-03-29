@@ -1,0 +1,61 @@
+---
+- name: Install Jenkins WAR (Standalone) on Ubuntu
+  hosts: jenkins
+  become: yes
+
+  vars:
+    jenkins_user: "{{ ansible_user }}"
+    jenkins_port: 9090
+    jenkins_home: "/home/{{ ansible_user }}/jenkins"
+
+  tasks:
+
+    - name: Install Java 17
+      apt:
+        name: openjdk-17-jdk
+        state: present
+        update_cache: yes
+
+    - name: Create Jenkins home directory
+      file:
+        path: "{{ jenkins_home }}"
+        state: directory
+        owner: "{{ jenkins_user }}"
+        group: "{{ jenkins_user }}"
+        mode: "0755"
+
+    - name: Download Jenkins WAR
+      get_url:
+        url: https://get.jenkins.io/war-stable/latest/jenkins.war
+        dest: "{{ jenkins_home }}/jenkins.war"
+        owner: "{{ jenkins_user }}"
+        group: "{{ jenkins_user }}"
+        mode: "0755"
+
+    - name: Create systemd service for Jenkins
+      copy:
+        dest: /etc/systemd/system/jenkins.service
+        content: |
+          [Unit]
+          Description=Jenkins Standalone Server
+          After=network.target
+
+          [Service]
+          Type=simple
+          User={{ jenkins_user }}
+          ExecStart=/usr/bin/java -jar {{ jenkins_home }}/jenkins.war --httpPort={{ jenkins_port }}
+          Restart=always
+
+          [Install]
+          WantedBy=multi-user.target
+      notify: Reload systemd
+
+    - name: Start and enable Jenkins service
+      systemd:
+        name: jenkins
+        state: started
+        enabled: yes
+
+  handlers:
+    - name: Reload systemd
+      command: systemctl daemon-reload

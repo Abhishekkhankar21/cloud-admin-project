@@ -1,8 +1,8 @@
-# App Server
-resource "aws_instance" "app_server" {
-  ami           = "ami-0c02fb55956c7d316"  # Ubuntu 22.04 LTS
-  instance_type = "t2.micro"
-  key_name      = "jenkins-key"            # Replace with your SSH key
+# Jenkins EC2
+resource "aws_instance" "jenkins" {
+  ami                    = "ami-07216ac99dc46a187" # Ubuntu 22.04 LTS in ap-south-1
+  instance_type          = "t2.micro"
+  key_name               = "jenkins-key"
 
   subnet_id              = aws_subnet.devops_public_subnet.id
   vpc_security_group_ids = [aws_security_group.devops_sg.id]
@@ -11,9 +11,9 @@ resource "aws_instance" "app_server" {
   monitoring                  = true
 
   tags = {
-    Name        = "App-server"
-    Environment = "dev"
-    Project     = "cloud-devops"
+    Name = "jenkins-server"
+    Environment = "dev and prod"
+    Project = "cloud-devops"
   }
 }
 

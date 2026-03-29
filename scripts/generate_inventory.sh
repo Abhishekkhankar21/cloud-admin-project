@@ -6,7 +6,7 @@ echo "Fetching Terraform outputs..."
 cd ../terraform
 
 # Get IPs from terraform outputs
-App_server_ip=$(terraform output -raw app_server_ip)
+JENKINS_IP=$(terraform output -raw jenkins_ip)
 ANSIBLE_IP=$(terraform output -raw ansible_ip)
 MONITORING_IP=$(terraform output -raw monitoring_ip)
 
@@ -16,8 +16,8 @@ cd ..
 echo "Updating Ansible inventory..."
 
 cat > ansible/inventory <<EOF
-[App_servers]
-$App_server_ip
+[jenkins]
+$JENKINS_IP
 
 [ansible]
 $ANSIBLE_IP

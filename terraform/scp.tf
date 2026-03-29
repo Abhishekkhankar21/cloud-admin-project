@@ -54,12 +54,3 @@ resource "aws_organizations_policy" "security_policy" {
   })
 
 }
-
-# Attach policy to root of organization
-
-resource "aws_organizations_policy_attachment" "attach_policy" {
-
-  policy_id = aws_organizations_policy.security_policy.id
-  target_id = data.aws_organizations_organization.org.roots[0].id
-
-}

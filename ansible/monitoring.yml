@@ -1,179 +1,129 @@
 ---
-- hosts: monitoring
+- name: Setup Monitoring Stack (Prometheus + Grafana)
+  hosts: monitoring
   become: yes
   vars:
-    prometheus_version: "3.10.0"
-    node_exporter_version: "1.6.1"
-    prometheus_install_dir: "/usr/local/bin"
-    prometheus_config_dir: "/etc/prometheus"
-    prometheus_data_dir: "/var/lib/prometheus"
+    prometheus_version: "2.48.0"
+    grafana_version: "10.3.0"
 
   tasks:
-    - name: Update apt packages
-      apt:
-        update_cache: yes
 
-    - name: Install required packages
-      apt:
-        name:
-          - wget
-          - curl
-          - tar
-          - apt-transport-https
-          - software-properties-common
-        state: present
+  # --------------------------
+  # 1️⃣ Install dependencies
+  # --------------------------
+  - name: Update apt cache
+    apt:
+      update_cache: yes
 
-    # -----------------------------
-    # Install Prometheus
-    # -----------------------------
-    - name: Download Prometheus
-      get_url:
-        url: "https://github.com/prometheus/prometheus/releases/download/v{{ prometheus_version }}/prometheus-{{ prometheus_version }}.linux-amd64.tar.gz"
-        dest: "/tmp/prometheus-{{ prometheus_version }}.tar.gz"
+  - name: Install required packages
+    apt:
+      name:
+        - wget
+        - tar
+        - curl
+        - gnupg
+        - software-properties-common
+      state: present
 
-    - name: Extract Prometheus
-      unarchive:
-        src: "/tmp/prometheus-{{ prometheus_version }}.tar.gz"
-        dest: "/tmp/"
-        remote_src: yes
+  # --------------------------
+  # 2️⃣ Install Prometheus
+  # --------------------------
+  - name: Download Prometheus tar
+    get_url:
+      url: "https://github.com/prometheus/prometheus/releases/download/v{{ prometheus_version }}/prometheus-{{ prometheus_version }}.linux-amd64.tar.gz"
+      dest: "/tmp/prometheus-{{ prometheus_version }}.tar.gz"
 
-    - name: Move Prometheus binary
-      copy:
-        src: "/tmp/prometheus-{{ prometheus_version }}.linux-amd64/prometheus"
-        dest: "{{ prometheus_install_dir }}/prometheus"
-        mode: '0755'
-        remote_src: yes
+  - name: Extract Prometheus
+    unarchive:
+      src: "/tmp/prometheus-{{ prometheus_version }}.tar.gz"
+      dest: /opt/
+      remote_src: yes
+      creates: "/opt/prometheus-{{ prometheus_version }}"
 
-    - name: Move promtool binary
-      copy:
-        src: "/tmp/prometheus-{{ prometheus_version }}.linux-amd64/promtool"
-        dest: "{{ prometheus_install_dir }}/promtool"
-        mode: '0755'
-        remote_src: yes
+  - name: Create symlink for Prometheus
+    file:
+      src: "/opt/prometheus-{{ prometheus_version }}"
+      dest: /opt/prometheus
+      state: link
 
-    - name: Create Prometheus directories
-      file:
-        path: "{{ item }}"
-        state: directory
-        owner: ubuntu
-        group: ubuntu
-      loop:
-        - "{{ prometheus_config_dir }}"
-        - "{{ prometheus_data_dir }}"
+  - name: Create Prometheus user
+    user:
+      name: prometheus
+      system: yes
+      shell: /usr/sbin/nologin
 
-    - name: Copy Prometheus config
-      copy:
-        content: |
-          global:
-            scrape_interval: 15s
-            evaluation_interval: 15s
+  - name: Set ownership for Prometheus directories
+    file:
+      path: "/opt/prometheus"
+      owner: prometheus
+      group: prometheus
+      recurse: yes
 
-          scrape_configs:
-            - job_name: 'prometheus'
-              static_configs:
-                - targets: ['localhost:9090']
+  - name: Create Prometheus systemd service
+    copy:
+      dest: /etc/systemd/system/prometheus.service
+      content: |
+        [Unit]
+        Description=Prometheus
+        Wants=network-online.target
+        After=network-online.target
 
-            - job_name: 'node_exporter'
-              static_configs:
-                - targets:
-                    - '13.232.144.1:9100'
-                    - '13.233.148.108:9100'
-                    - '65.2.151.216:9100'
-        dest: "{{ prometheus_config_dir }}/prometheus.yml"
-        owner: ubuntu
-        group: ubuntu
-        mode: '0644'
+        [Service]
+        User=prometheus
+        Group=prometheus
+        Type=simple
+        ExecStart=/opt/prometheus/prometheus \
+          --config.file=/opt/prometheus/prometheus.yml \
+          --storage.tsdb.path=/opt/prometheus/data
 
-    - name: Create Prometheus systemd service
-      copy:
-        dest: /etc/systemd/system/prometheus.service
-        content: |
-          [Unit]
-          Description=Prometheus Monitoring
-          Wants=network-online.target
-          After=network-online.target
+        [Install]
+        WantedBy=multi-user.target
 
-          [Service]
-          User=ubuntu
-          ExecStart={{ prometheus_install_dir }}/prometheus \
-            --config.file={{ prometheus_config_dir }}/prometheus.yml \
-            --storage.tsdb.path={{ prometheus_data_dir }} \
-            --web.console.templates={{ prometheus_config_dir }}/consoles \
-            --web.console.libraries={{ prometheus_config_dir }}/console_libraries
+  - name: Ensure Prometheus service is enabled and started
+    systemd:
+      name: prometheus
+      enabled: yes
+      state: started
 
-          Restart=always
+  # --------------------------
+  # 3️⃣ Install Grafana
+  # --------------------------
+  - name: Add Grafana GPG key
+    apt_key:
+      url: https://apt.grafana.com/gpg.key
+      state: present
 
-          [Install]
-          WantedBy=multi-user.target
+  - name: Add Grafana APT repository
+    apt_repository:
+      repo: "deb https://apt.grafana.com stable main"
+      state: present
 
-    - name: Reload systemd
-      command: systemctl daemon-reload
+  - name: Update apt cache
+    apt:
+      update_cache: yes
 
-    - name: Start Prometheus
-      service:
-        name: prometheus
-        state: started
-        enabled: yes
+  - name: Install Grafana
+    apt:
+      name: grafana={{ grafana_version }}
+      state: present
 
-    # -----------------------------
-    # Install Node Exporter
-    # -----------------------------
-    - name: Download Node Exporter
-      get_url:
-        url: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
-        dest: "/tmp/node_exporter-{{ node_exporter_version }}.tar.gz"
+  - name: Ensure Grafana service is enabled and started
+    systemd:
+      name: grafana-server
+      enabled: yes
+      state: started
 
-    - name: Extract Node Exporter
-      unarchive:
-        src: "/tmp/node_exporter-{{ node_exporter_version }}.tar.gz"
-        dest: "/usr/local/bin/"
-        remote_src: yes
-        extra_opts: [--strip-components=1]
+  # --------------------------
+  # 4️⃣ Optional: Firewall
+  # --------------------------
+  - name: Allow Prometheus port
+    ufw:
+      rule: allow
+      port: 9090
+      proto: tcp
 
-    - name: Create Node Exporter systemd service
-      copy:
-        dest: /etc/systemd/system/node_exporter.service
-        content: |
-          [Unit]
-          Description=Node Exporter
-          Wants=network-online.target
-          After=network-online.target
-
-          [Service]
-          User=ubuntu
-          ExecStart=/usr/local/bin/node_exporter
-
-          Restart=always
-
-          [Install]
-          WantedBy=default.target
-
-    - name: Start Node Exporter
-      service:
-        name: node_exporter
-        state: started
-        enabled: yes
-
-    # -----------------------------
-    # Install Grafana
-    # -----------------------------
-    - name: Add Grafana GPG key
-      shell: wget -q -O - https://packages.grafana.com/gpg.key | apt-key add -
-
-    - name: Add Grafana repository
-      shell: echo "deb https://packages.grafana.com/oss/deb stable main" | tee /etc/apt/sources.list.d/grafana.list
-
-    - name: Update apt again
-      apt:
-        update_cache: yes
-
-    - name: Install Grafana
-      apt:
-        name: grafana
-        state: present
-
-    - name: Start Grafana
-      service:
-        name: grafana-server
-        state: started
-        enabled: yes
+  - name: Allow Grafana port
+    ufw:
+      rule: allow
+      port: 3000
+      proto: tcp
