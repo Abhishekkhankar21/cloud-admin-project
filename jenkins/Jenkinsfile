@@ -1,51 +1,41 @@
 pipeline {
     agent any
 
+    environment {
+        AWS_REGION = "ap-south-1"
+    }
+
     stages {
         stage('Clone Repository') {
             steps {
-                git branch: 'main',
+                git branch: 'main', 
                     url: 'https://github.com/Abhishekkhankar21/cloud-admin-project.git'
             }
         }
-        ...
+
+        stage('Terraform Init & Apply') {
+            steps {
+                sh 'cd terraform && terraform init'
+                sh 'cd terraform && terraform apply -auto-approve'
+            }
+        }
+
+        stage('Generate Inventory') {
+            steps {
+                sh 'cd terraform && terraform output -json > ../ansible/inventory.json'
+            }
+        }
+
+        stage('Run Ansible') {
+            steps {
+                sh 'ansible-playbook -i ansible/inventory.json ansible/jenkins.yml'
+            }
+        }
     }
-}
 
-stage('Terraform Init'){
-steps{
-sh 'cd terraform && terraform init'
-}
-}
-
-
-
-stage('Terraform Apply'){
-steps{
-sh 'cd terraform && terraform apply -auto-approve'
-}
-}
-
-stage('Generate Inventory') {
-    steps {
-        sh 'chmod +x scripts/generate_inventory.sh'
-        sh './scripts/generate_inventory.sh'
+    post {
+        always {
+            echo 'Pipeline finished.'
+        }
     }
-}
-
-stage('Run Ansible'){
-steps{
-sh 'ansible-playbook ansible/monitoring.yml'
-}
-}
-
-
-stage('Configure Monitoring Server') {
-
-steps {
-
-sh 'ansible-playbook -i ansible/inventory ansible/monitoring.yml'
-
-}
-
 }
