@@ -1,13 +1,15 @@
 pipeline {
+    agent any
 
-agent any
-
-stages {
-
-stage('Clone Repo'){
-steps{
-git 'https://github.com/Abhishekkhankar21/cloud-admin-project.git'
-}
+    stages {
+        stage('Clone Repository') {
+            steps {
+                git branch: 'main',
+                    url: 'https://github.com/Abhishekkhankar21/cloud-admin-project.git'
+            }
+        }
+        ...
+    }
 }
 
 stage('Terraform Init'){
@@ -15,6 +17,8 @@ steps{
 sh 'cd terraform && terraform init'
 }
 }
+
+
 
 stage('Terraform Apply'){
 steps{
@@ -35,8 +39,6 @@ sh 'ansible-playbook ansible/monitoring.yml'
 }
 }
 
-}
-}
 
 stage('Configure Monitoring Server') {
 
